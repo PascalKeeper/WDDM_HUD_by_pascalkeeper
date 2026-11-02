@@ -330,16 +330,18 @@ namespace WddmHud.UI
                 if (game)
                 {
                     if (!Visible) Show();
-                    if (_config.AutoClickThroughInGame && !_config.ClickThrough)
+                    if (_config.AutoClickThroughInGame && !_config.ClickThrough && !_gameClickThroughApplied)
                     {
                         _gameClickThroughApplied = true;
-                        SetClickThrough(true);
+                        ApplyExtendedStyles();
+                        ComposeAndPush();
                     }
                 }
                 else if (_gameClickThroughApplied)
                 {
                     _gameClickThroughApplied = false;
-                    SetClickThrough(false);
+                    ApplyExtendedStyles();
+                    ComposeAndPush();
                 }
             }
 
@@ -467,7 +469,7 @@ namespace WddmHud.UI
             float s = _scale;
             // Alpha 1 is invisible on the desktop and still a drag target.
             // A fully clear pixel falls through a layered window.
-            if (!cfg.ClickThrough)
+            if (!EffectiveClickThrough)
             {
                 using var hit = new SolidBrush(Color.FromArgb(1, 0, 0, 0));
                 g.FillRectangle(hit, 0, 0, Width, Height);
@@ -705,7 +707,7 @@ namespace WddmHud.UI
         // ---- drag (moves whole window; does not scramble content) ----
         private void OnDragDown(object? sender, MouseEventArgs e)
         {
-            if (e.Button != MouseButtons.Left || _config.ClickThrough) return;
+            if (e.Button != MouseButtons.Left || EffectiveClickThrough) return;
             if (GripRect().Contains(e.Location))
             {
                 _resizing = true;
@@ -795,7 +797,7 @@ namespace WddmHud.UI
                 if (!IsHandleCreated) return;
                 int ex = GetWindowLong(Handle, GWL_EXSTYLE);
                 ex |= WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE;
-                if (_config.ClickThrough)
+                if (EffectiveClickThrough)
                     ex |= WS_EX_TRANSPARENT;
                 else
                     ex &= ~WS_EX_TRANSPARENT;
@@ -809,10 +811,15 @@ namespace WddmHud.UI
             }
         }
 
+        private bool EffectiveClickThrough => _config.ClickThrough || _gameClickThroughApplied;
+
         public void SetClickThrough(bool enabled)
         {
             _config.ClickThrough = enabled;
+            if (!enabled)
+                _gameClickThroughApplied = false;
             ApplyExtendedStyles();
+            try { if (IsHandleCreated) ComposeAndPush(); } catch { /* ignore */ }
             _config.Save();
         }
 
